@@ -1,0 +1,21 @@
+Assignment:
+You have been provided a .wav file with audio that gives a persons name, phone number, email address and policy number.
+Your task is to transform this raw audio data into structured data JSON data using free or trial tools available on
+the public internet.
+
+Criteria:
+You must write a python application which can be run locally, which accepts a .wav file like the sample you have been provided.
+Use any available free or trial tool(s) to manipulate the audio bytes into structured data in the following format:
+
+{
+"name": "John Smith",
+"phoneNumber": "6174301234",
+"email": john.smith@gmail.com",
+"policyNumber": "ABC123"
+}
+
+Stretch Goal:
+Synthesize a new audio file confirming the phone number and asking a follow up question.
+
+Bonus:
+Your application is capable of taking either a .wav file as an upload, OR is capable of streaming the audio via the microphone.

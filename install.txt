@@ -1,0 +1,9 @@
+Installation
+Mac
+brew install portaudio
+brew install ffmpeg
+python3 -m venv homework
+
+source homework/bin/activate
+
+pip install -r requirements.txt
