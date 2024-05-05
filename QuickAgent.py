@@ -5,7 +5,10 @@ import subprocess
 import requests
 import time
 import os
-
+import argparse
+import logging, verboselogs
+from datetime import datetime
+import httpx
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_groq import ChatGroq
@@ -25,11 +28,15 @@ from deepgram import (
     LiveTranscriptionEvents,
     LiveOptions,
     Microphone,
+    FileSource,
+    PrerecordedOptions
 )
 
 
 load_dotenv()
-
+ # example of setting up a client config. logging values: WARNING, VERBOSE, DEBUG, SPAM
+config = DeepgramClientOptions(options={"keepalive": "true"})
+deepgram: DeepgramClient = DeepgramClient(os.getenv("DEEPGRAM_API_KEY"), config)
 
 class LanguageModelProcessor:
     def __init__(self):
@@ -155,9 +162,9 @@ async def get_transcript(callback):
     transcription_complete = asyncio.Event()  # Event to signal transcription completion
 
     try:
-        # example of setting up a client config. logging values: WARNING, VERBOSE, DEBUG, SPAM
-        config = DeepgramClientOptions(options={"keepalive": "true"})
-        deepgram: DeepgramClient = DeepgramClient(os.getenv("DEEPGRAM_API_KEY"), config)
+        # # example of setting up a client config. logging values: WARNING, VERBOSE, DEBUG, SPAM
+        # config = DeepgramClientOptions(options={"keepalive": "true"})
+        # deepgram: DeepgramClient = DeepgramClient(os.getenv("DEEPGRAM_API_KEY"), config)
 
         dg_connection = deepgram.listen.asynclive.v("1")
         print("Listening...")
@@ -237,6 +244,89 @@ class ConversationManager:
             self.transcription_response = ""
 
 
+
+class WavFile:
+    def __init__(self):
+        """Initialize with command line arguments parsing."""
+        parser = argparse.ArgumentParser(description='Choose a .wav file from the current directory.')
+        parser.add_argument('--dir', type=str, default='.',
+                            help='Directory to search for .wav files')
+        self.args = parser.parse_args()
+        self.directory = self.args.dir
+
+    def list_wav_files(self):
+        """List all .wav files in the specified directory."""
+        files = [f for f in os.listdir(self.directory) if f.endswith('.wav')]
+        return files
+
+    def choose_file(self):
+        """Display .wav files and prompt the user to choose one."""
+        wav_files = self.list_wav_files()
+        if not wav_files:
+            print("No .wav files found in the directory.")
+            return None
+
+        for index, file in enumerate(wav_files):
+            print(f"{index + 1}: {file}")
+
+        choice = int(input("Enter the number of the file you want to select: ")) - 1
+        return wav_files[choice]
+
+    def process_file(self):
+        """Process the chosen file."""
+        print("Processing the file...")
+        # Implement the processing logic here
+        try:
+          
+            with open(self.chosen_file, "rb") as file:
+                buffer_data = file.read()
+
+            payload: FileSource = {
+                "buffer": buffer_data,
+            }
+
+            options: PrerecordedOptions = PrerecordedOptions(
+                model="nova-2",
+                smart_format=True,
+                utterances=True,
+                punctuate=True,
+                diarize=True,
+            )
+
+            before = datetime.now()
+            response = deepgram.listen.prerecorded.v("1").transcribe_file(
+                payload, options, timeout=httpx.Timeout(300.0, connect=10.0)
+            )
+            after = datetime.now()
+
+            print(response.to_json(indent=4))
+            print("")
+            difference = after - before
+            print(f"time: {difference.seconds}")
+
+        except Exception as e:
+            print(f"Exception: {e}")
+        pass
+    def run(self):
+        """Execute the file selection process."""
+        chosen_file = self.choose_file()
+        if chosen_file:
+            print(f"You have selected: {chosen_file}")
+            self.chosen_file = chosen_file # Save the chosen file
+            self.process_file()
+    
+
+
+    
 if __name__ == "__main__":
-    manager = ConversationManager()
-    asyncio.run(manager.main())
+    print("""--- Welcome to my homework assignment! ---
+    This program does some basic NER on either a .wav file or live audio input.
+    It then uses a language model to generate a response.
+          """)
+    choice = input("Do you want to (1) select a .wav file or (2) use your computer's microphone for real-time transcription? Enter 1 or 2: ")
+    if choice == '1':
+        wav_file = WavFile()
+        wav_file.run()
+    elif choice == '2':
+        manager = ConversationManager()
+        asyncio.run(manager.main())
