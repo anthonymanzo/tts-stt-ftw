@@ -286,6 +286,7 @@ class ConversationManager:
                 # Now trigger a separate llm call to parse the conversation and
                 # return the desired json output (e.g. policy number, name, phone , etc.)
                 final_output = get_final_output()
+                print(f"Final output: {final_output}")
                 break
 
             llm_response = self.llm.process(self.transcription_response)
