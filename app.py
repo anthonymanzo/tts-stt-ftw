@@ -48,19 +48,17 @@ deepgram: DeepgramClient = DeepgramClient(os.getenv("DEEPGRAM_API_KEY"), config)
 file_name = f"conversations/convo_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
 convo_file = open(file_name, "w")
 
-"""
-The FinalOutputParser class is used to parse the final output from the conversation using an LLM and return the desired output as a pydantic model.
-"""
 
-
-def get_final_output(full_conversation_filename: str | None) -> ContactInfo:
+def get_final_output() -> ContactInfo:
+    """
+    Parse the final output from the conversation using an LLM and return the desired output as a pydantic model.
+    """
     llm = ChatGroq(
         temperature=0,
         model_name=os.getenv("GROQ_MODEL_NAME"),
         groq_api_key=os.getenv("GROQ_API_KEY"),
     )
-    if full_conversation_filename:
-        file_name = full_conversation_filename
+
     cf = open(file_name, "r")
     full_convo = cf.read()
     parser = PydanticOutputParser(pydantic_object=ContactInfo)
@@ -73,8 +71,8 @@ def get_final_output(full_conversation_filename: str | None) -> ContactInfo:
     chain = prompt | llm | parser
 
     r = chain.invoke({"query": full_convo})
-    print(r)
-    return r
+    # print(r)
+    return r.dict()
 
 
 class LLMProc:
@@ -290,6 +288,10 @@ class ConversationManager:
 
 class WavFile:
     def __init__(self):
+
+        self.transcription_response = ""
+        self.llm = LLMProc()
+
         """Initialize with command line arguments parsing."""
         parser = argparse.ArgumentParser(
             description="Choose a .wav file from the current directory."
@@ -344,11 +346,20 @@ class WavFile:
                 payload, options, timeout=httpx.Timeout(300.0, connect=10.0)
             )
             after = datetime.now()
-            convo_file.write(
-                f"Human: {response.results.channels[0].alternatives[0].transcript}\n"
+            self.transcription_response = (
+                response.results.channels[0].alternatives[0].transcript
             )
+            convo_file.write(f"Human: {self.transcription_response }\n")
+            print(f"Human: {self.transcription_response}")
+            llm_response = self.llm.process(self.transcription_response)
+            print(f"LLM: {llm_response}")
+            convo_file.write(f"LLM: {llm_response}\n")
+            tts = TextToSpeech()
+            tts.speak(llm_response)
+
             convo_file.close()
-            print(response.results.channels[0].alternatives[0].transcript)
+            final_output = get_final_output()
+            print(f"Final output: {final_output}")
             print("")
             difference = after - before
             print(f"time: {difference.seconds}")
