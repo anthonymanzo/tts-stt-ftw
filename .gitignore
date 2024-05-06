@@ -2,3 +2,4 @@
 .env
 homework/*
 conversations/*.txt
+__pycache__/*
