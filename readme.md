@@ -4,7 +4,7 @@ This is a python application meant to be run from the command line.  It's goal i
 It was some homework I was given and the description.txt provides more details on that.
 
 ## Prerequisites
-
+** Python version 3.11 **
 For the mac, you will need to have portaudio and ffmpeg installed on your system.
 The suggested way is to use brew
 
@@ -12,7 +12,7 @@ The suggested way is to use brew
 `brew install ffmpeg`
 
 ## Installation
-1. Create a virtual environment `python3 -m venv homework`
+1. Git clone this repo to your computer.  Create a virtual environment `python3 -m venv homework`
 
 2. Activate the venv `source homework/bin/activate`
 
