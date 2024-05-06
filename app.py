@@ -6,10 +6,11 @@ import requests
 import time
 import os
 import argparse
-import logging, verboselogs
 from datetime import datetime
 import httpx
 
+# Langchain imports
+from langchain.chains import LLMChain
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
@@ -23,11 +24,7 @@ from langchain.prompts import (
 )
 from langchain.output_parsers import PydanticOutputParser
 
-# the desired output as a pydantic model
-from models import ContactInfo
-
-from langchain.chains import LLMChain
-
+# DeepGram imports, used for live transcription
 from deepgram import (
     DeepgramClient,
     DeepgramClientOptions,
@@ -38,13 +35,15 @@ from deepgram import (
     PrerecordedOptions,
 )
 
+# the desired output as a pydantic model
+from models import ContactInfo
 
 load_dotenv()
-# example of setting up a client config. logging values: WARNING, VERBOSE, DEBUG, SPAM
+# Deepgram API key and model name, used throughout the program
 config = DeepgramClientOptions(options={"keepalive": "true"})
 deepgram: DeepgramClient = DeepgramClient(os.getenv("DEEPGRAM_API_KEY"), config)
 
-# make a new file in the conversations folder, with a unique timestamped name to keep track of all transcriptions for future training and evaluation.  We will append to this file as we go.
+# Each run makes a new file in the conversations folder, with a unique timestamped name to keep track of all transcriptions for final output parsing and future training(todo) and evaluation(todo).  We will append to this file as we go.
 file_name = f"conversations/convo_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
 convo_file = open(file_name, "w")
 
@@ -52,6 +51,7 @@ convo_file = open(file_name, "w")
 def get_final_output() -> ContactInfo:
     """
     Parse the final output from the conversation using an LLM and return the desired output as a pydantic model.
+    Done outside of the other model to keep the main logic clean and allow for longer inference offline with different models if needed.
     """
     llm = ChatGroq(
         temperature=0,
@@ -76,6 +76,9 @@ def get_final_output() -> ContactInfo:
 
 
 class LLMProc:
+    """
+    This class is responsible for processing the user input (already transcribed as text) and generating a response using the LLM.
+    """
 
     def __init__(self):
         self.llm = ChatGroq(
@@ -178,6 +181,11 @@ class TextToSpeech:
 
 
 class TranscriptCollector:
+    """
+    Helper class to collect and concatenate the parts of a transcript until a full sentence is received.
+    Triggered with the final part of a sentence using asyncio.Event()s to signal completion.
+    """
+
     def __init__(self):
         self.reset()
 
@@ -256,6 +264,10 @@ async def get_transcript(callback):
 
 
 class ConversationManager:
+    """
+    This class is responsible for managing the conversation between the user and the LLM.
+    """
+
     def __init__(self):
         self.transcription_response = ""
         self.llm = LLMProc()
@@ -287,6 +299,11 @@ class ConversationManager:
 
 
 class WavFile:
+    """
+    This class is responsible for processing a .wav file and generating a response using the LLM.
+    Deals only with prerecorded audio files.
+    """
+
     def __init__(self):
 
         self.transcription_response = ""
@@ -392,5 +409,6 @@ if __name__ == "__main__":
         wav_file = WavFile()
         wav_file.run()
     elif choice == "2":
+        print("Starting real-time transcription...Say 'Goodbye' to exit.")
         manager = ConversationManager()
         asyncio.run(manager.main())
