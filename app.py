@@ -29,30 +29,34 @@ from deepgram import (
     LiveOptions,
     Microphone,
     FileSource,
-    PrerecordedOptions
+    PrerecordedOptions,
 )
 
 
 load_dotenv()
- # example of setting up a client config. logging values: WARNING, VERBOSE, DEBUG, SPAM
+# example of setting up a client config. logging values: WARNING, VERBOSE, DEBUG, SPAM
 config = DeepgramClientOptions(options={"keepalive": "true"})
 deepgram: DeepgramClient = DeepgramClient(os.getenv("DEEPGRAM_API_KEY"), config)
 
-class LanguageModelProcessor:
+# make a new file in the conversations folder, with a unique timestamped name to keep track of all transcriptions for future training and evaluation.  We will append to this file as we go.
+file_name = f"conversations/convo_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+convo_file = open(file_name, "w")
+
+
+class LLMProc:
+
     def __init__(self):
         self.llm = ChatGroq(
             temperature=0,
-            model_name="llama3-70b-8192",
+            model_name=os.getenv("GROQ_MODEL_NAME"),
             groq_api_key=os.getenv("GROQ_API_KEY"),
         )
-        # self.llm = ChatOpenAI(temperature=0, model_name="gpt-4-0125-preview", openai_api_key=os.getenv("OPENAI_API_KEY"))
-        # self.llm = ChatOpenAI(temperature=0, model_name="gpt-3.5-turbo-0125", openai_api_key=os.getenv("OPENAI_API_KEY"))
 
         self.memory = ConversationBufferMemory(
             memory_key="chat_history", return_messages=True
         )
 
-        # Load the system prompt from a file
+        # Load the system prompt from a file so it's a little easier to version
         with open("system_prompt.txt", "r") as file:
             system_prompt = file.read().strip()
 
@@ -182,6 +186,7 @@ async def get_transcript(callback):
                 if len(full_sentence.strip()) > 0:
                     full_sentence = full_sentence.strip()
                     print(f"Human: {full_sentence}")
+                    convo_file.write(f"Human: {full_sentence}\n")
                     callback(full_sentence)  # Call the callback with the full_sentence
                     transcript_collector.reset()
                     transcription_complete.set()  # Signal to stop transcription and exit
@@ -221,7 +226,7 @@ async def get_transcript(callback):
 class ConversationManager:
     def __init__(self):
         self.transcription_response = ""
-        self.llm = LanguageModelProcessor()
+        self.llm = LLMProc()
 
     async def main(self):
         def handle_full_sentence(full_sentence):
@@ -233,10 +238,14 @@ class ConversationManager:
 
             # Check for "goodbye" to exit the loop
             if "goodbye" in self.transcription_response.lower():
+                convo_file.close()
+                # Now trigger a separate llm call to parse the conversation and
+                # return the desired json output (e.g. policy number, name, phone , etc.)
                 break
 
             llm_response = self.llm.process(self.transcription_response)
-
+            print(f"LLM: {llm_response}")
+            convo_file.write(f"LLM: {llm_response}\n")
             tts = TextToSpeech()
             tts.speak(llm_response)
 
@@ -244,19 +253,21 @@ class ConversationManager:
             self.transcription_response = ""
 
 
-
 class WavFile:
     def __init__(self):
         """Initialize with command line arguments parsing."""
-        parser = argparse.ArgumentParser(description='Choose a .wav file from the current directory.')
-        parser.add_argument('--dir', type=str, default='.',
-                            help='Directory to search for .wav files')
+        parser = argparse.ArgumentParser(
+            description="Choose a .wav file from the current directory."
+        )
+        parser.add_argument(
+            "--dir", type=str, default=".", help="Directory to search for .wav files"
+        )
         self.args = parser.parse_args()
         self.directory = self.args.dir
 
     def list_wav_files(self):
         """List all .wav files in the specified directory."""
-        files = [f for f in os.listdir(self.directory) if f.endswith('.wav')]
+        files = [f for f in os.listdir(self.directory) if f.endswith(".wav")]
         return files
 
     def choose_file(self):
@@ -277,7 +288,7 @@ class WavFile:
         print("Processing the file...")
         # Implement the processing logic here
         try:
-          
+
             with open(self.chosen_file, "rb") as file:
                 buffer_data = file.read()
 
@@ -307,26 +318,30 @@ class WavFile:
         except Exception as e:
             print(f"Exception: {e}")
         pass
+
     def run(self):
         """Execute the file selection process."""
         chosen_file = self.choose_file()
         if chosen_file:
             print(f"You have selected: {chosen_file}")
-            self.chosen_file = chosen_file # Save the chosen file
+            self.chosen_file = chosen_file  # Save the chosen file
             self.process_file()
-    
 
 
-    
 if __name__ == "__main__":
-    print("""--- Welcome to my homework assignment! ---
+    print(
+        """--- Welcome to my homework assignment! ---
     This program does some basic NER on either a .wav file or live audio input.
     It then uses a language model to generate a response.
-          """)
-    choice = input("Do you want to (1) select a .wav file or (2) use your computer's microphone for real-time transcription? Enter 1 or 2: ")
-    if choice == '1':
+          """
+    )
+    choice = input(
+        "Do you want to (1) select a .wav file or (2) use your computer's microphone for real-time transcription? Enter 1 or 2: "
+    )
+
+    if choice == "1":
         wav_file = WavFile()
         wav_file.run()
-    elif choice == '2':
+    elif choice == "2":
         manager = ConversationManager()
         asyncio.run(manager.main())
