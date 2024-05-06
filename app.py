@@ -91,7 +91,7 @@ class LLMProc:
 
 
 class TextToSpeech:
-    # Set your Deepgram API Key and desired voice model
+    # Deepgram API key and model name
     DG_API_KEY = os.getenv("DEEPGRAM_API_KEY")
     MODEL_NAME = "aura-helios-en"  # Example model name, change as needed
 
@@ -309,8 +309,11 @@ class WavFile:
                 payload, options, timeout=httpx.Timeout(300.0, connect=10.0)
             )
             after = datetime.now()
-
-            print(response.to_json(indent=4))
+            convo_file.write(
+                f"Human: {response.results.channels[0].alternatives[0].transcript}\n"
+            )
+            convo_file.close()
+            print(response.results.channels[0].alternatives[0].transcript)
             print("")
             difference = after - before
             print(f"time: {difference.seconds}")
