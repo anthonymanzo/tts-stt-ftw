@@ -19,7 +19,13 @@ from langchain.prompts import (
     MessagesPlaceholder,
     SystemMessagePromptTemplate,
     HumanMessagePromptTemplate,
+    PromptTemplate,
 )
+from langchain.output_parsers import PydanticOutputParser
+
+# the desired output as a pydantic model
+from models import ContactInfo
+
 from langchain.chains import LLMChain
 
 from deepgram import (
@@ -41,6 +47,34 @@ deepgram: DeepgramClient = DeepgramClient(os.getenv("DEEPGRAM_API_KEY"), config)
 # make a new file in the conversations folder, with a unique timestamped name to keep track of all transcriptions for future training and evaluation.  We will append to this file as we go.
 file_name = f"conversations/convo_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
 convo_file = open(file_name, "w")
+
+"""
+The FinalOutputParser class is used to parse the final output from the conversation using an LLM and return the desired output as a pydantic model.
+"""
+
+
+def get_final_output(full_conversation_filename: str | None) -> ContactInfo:
+    llm = ChatGroq(
+        temperature=0,
+        model_name=os.getenv("GROQ_MODEL_NAME"),
+        groq_api_key=os.getenv("GROQ_API_KEY"),
+    )
+    if full_conversation_filename:
+        file_name = full_conversation_filename
+    cf = open(file_name, "r")
+    full_convo = cf.read()
+    parser = PydanticOutputParser(pydantic_object=ContactInfo)
+    prompt = PromptTemplate(
+        template="Read the full conversation transcript between the Human and the LLM to find the human's contact info.\n{format_instructions}\n{query}\n",
+        input_variables=["query"],
+        partial_variables={"format_instructions": parser.get_format_instructions()},
+    )
+
+    chain = prompt | llm | parser
+
+    r = chain.invoke({"query": full_convo})
+    print(r)
+    return r
 
 
 class LLMProc:
@@ -241,6 +275,7 @@ class ConversationManager:
                 convo_file.close()
                 # Now trigger a separate llm call to parse the conversation and
                 # return the desired json output (e.g. policy number, name, phone , etc.)
+                final_output = get_final_output()
                 break
 
             llm_response = self.llm.process(self.transcription_response)
